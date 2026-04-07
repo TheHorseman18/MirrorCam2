@@ -1,1 +1,609 @@
+<!DOCTYPE html>
 
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+    <title>Espejo de Mitad - Vista Previa en Vivo</title>
+
+    <style>
+    * {
+        box-sizing: border-box;
+        user-select: none;
+    }
+
+    body {
+        font-family: system-ui, 'Segoe UI', sans-serif;
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle at top, #0f172a, #020617);
+        color: #e2e8f0;
+    }
+
+    .container {
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 24px;
+        padding: 1.8rem;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+        max-width: 540px;
+        width: 100%;
+    }
+
+    h3 {
+        text-align: center;
+        font-weight: 600;
+        margin: 0 0 1.2rem;
+        font-size: 1.5rem;
+        letter-spacing: 0.5px;
+        color: #38bdf8;
+        text-shadow: 0 0 12px rgba(56,189,248,0.5);
+    }
+
+    h3:before { content: "✨"; }
+    h3:after { content: "🪞"; }
+
+    .preview-area {
+        background: #020617;
+        border-radius: 20px;
+        padding: 8px;
+        border: 1px solid rgba(255,255,255,0.08);
+        box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        margin-bottom: 18px;
+    }
+
+    canvas, video {
+        display: block;
+        width: 100%;
+        border-radius: 16px;
+        background: #000;
+    }
+
+    #previewCanvas {
+        border: 2px solid rgba(56,189,248,0.5);
+        box-shadow: 0 0 25px rgba(56,189,248,0.25);
+        transition: 0.25s ease;
+    }
+
+    #previewCanvas:hover {
+        transform: scale(1.015);
+        box-shadow: 0 0 35px rgba(56,189,248,0.5);
+    }
+
+    #canvas {
+        margin-top: 10px;
+        border: 2px solid rgba(168,85,247,0.4);
+        box-shadow: 0 0 20px rgba(168,85,247,0.2);
+    }
+
+    .controls {
+        display: flex;
+        justify-content: center;
+        margin: 20px 0;
+    }
+
+    button {
+        background: linear-gradient(135deg, #38bdf8, #6366f1);
+        border: none;
+        padding: 12px 30px;
+        font-size: 1rem;
+        font-weight: 600;
+        border-radius: 999px;
+        color: white;
+        cursor: pointer;
+        transition: 0.2s ease;
+        box-shadow: 0 8px 20px rgba(99,102,241,0.4);
+    }
+
+    button:hover {
+        transform: translateY(-2px) scale(1.03);
+        box-shadow: 0 12px 30px rgba(99,102,241,0.6);
+    }
+
+    button:active {
+        transform: scale(0.96);
+    }
+
+    button#snap {
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        box-shadow: 0 8px 20px rgba(34,197,94,0.4);
+    }
+
+    button#snap:hover {
+        box-shadow: 0 12px 30px rgba(34,197,94,0.6);
+    }
+
+    .info {
+        text-align: center;
+        font-size: 0.8rem;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.08);
+        padding: 8px 14px;
+        border-radius: 999px;
+        color: #cbd5f5;
+        backdrop-filter: blur(6px);
+    }
+
+    footer {
+        margin-top: 18px;
+        font-size: 0.7rem;
+        color: #64748b;
+        text-align: center;
+    }
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+    <h3>Espejo a Mitad · Vista Previa en Vivo</h3>
+
+ 
+
+    <!-- CUADRO SUPERIOR: ahora es un canvas que muestra el efecto de simetría en tiempo real -->
+
+    <div class="preview-area">
+
+        <canvas id="previewCanvas" width="500" height="500"></canvas>
+
+    </div>
+
+ 
+
+    <div class="controls">
+
+        <button id="snap">📸 Capturar Foto</button>
+
+    </div>
+
+ 
+
+    <!-- Canvas inferior para guardar la captura con efecto espejo (opcional) -->
+
+    <canvas id="canvas" width="500" height="500"></canvas>
+
+    <div class="info">
+
+        🪞 Efecto activo: Mitad izquierda real + Mitad derecha reflejada (simetría en vivo)
+
+    </div>
+
+</div>
+
+<footer>La cámara se muestra con efecto espejo instantáneo en el cuadro superior | Captura mantiene el mismo estilo</footer>
+
+ 
+
+<script>
+
+    (function() {
+
+        // ----- Elementos DOM -----
+
+        // Video oculto (solo como fuente de la cámara, no se muestra visualmente)
+
+        const video = document.createElement('video');
+
+        video.id = "hiddenVideo";
+
+        video.setAttribute('autoplay', 'true');
+
+        video.setAttribute('playsinline', 'true');
+
+        video.style.display = "none";   // invisible pero necesario para obtener frames
+
+        document.body.appendChild(video);
+
+ 
+
+        // Canvas superior: vista previa con efecto espejo EN VIVO
+
+        const previewCanvas = document.getElementById('previewCanvas');
+
+        const previewCtx = previewCanvas.getContext('2d');
+
+ 
+
+        // Canvas inferior para captura fija (cuando se presiona el botón)
+
+        const captureCanvas = document.getElementById('canvas');
+
+        const captureCtx = captureCanvas.getContext('2d');
+
+ 
+
+        const snapButton = document.getElementById('snap');
+
+ 
+
+        // Dimensiones fijas (500x500)
+
+        const W = 500;
+
+        const H = 500;
+
+        previewCanvas.width = W;
+
+        previewCanvas.height = H;
+
+        captureCanvas.width = W;
+
+        captureCanvas.height = H;
+
+ 
+
+        let animationId = null;
+
+        let isStreamActive = false;
+
+ 
+
+        // ---------- 1. Acceder a la cámara ----------
+
+        navigator.mediaDevices.getUserMedia({ video: true })
+
+            .then(stream => {
+
+                video.srcObject = stream;
+
+                isStreamActive = true;
+
+ 
+
+                // Aseguramos que el video comience a reproducirse
+
+                video.onloadedmetadata = () => {
+
+                    video.play().catch(e => console.warn("auto-play falló:", e));
+
+                };
+
+ 
+
+                // Una vez que el video tenga datos, lanzamos el loop de animación
+
+                video.addEventListener('play', () => {
+
+                    if (animationId) cancelAnimationFrame(animationId);
+
+                    startMirrorPreview();
+
+                });
+
+ 
+
+                // Si por algún motivo el video ya está listo antes
+
+                if (video.readyState >= 2) {
+
+                    startMirrorPreview();
+
+                }
+
+            })
+
+            .catch(err => {
+
+                console.error("Error al acceder a la webcam:", err);
+
+                // Mostrar mensaje amigable en el canvas de preview
+
+                previewCtx.font = "bold 18px system-ui";
+
+                previewCtx.fillStyle = "#ff4444";
+
+                previewCtx.shadowBlur = 0;
+
+                previewCtx.fillText("⚠️ No se pudo acceder a la cámara", 70, H/2);
+
+                previewCtx.font = "14px system-ui";
+
+                previewCtx.fillStyle = "#cccccc";
+
+                previewCtx.fillText("Verifica permisos y conecta una cámara", 120, H/2 + 40);
+
+                captureCtx.fillStyle = "#222";
+
+                captureCtx.fillRect(0,0,W,H);
+
+                captureCtx.fillStyle = "white";
+
+                captureCtx.font = "16px monospace";
+
+                captureCtx.fillText("Cámara no disponible", 160, H/2);
+
+            });
+
+ 
+
+        // ---------- 2. Función que dibuja el efecto espejo a mitad en un canvas destino ----------
+
+        // Esta función aplica la misma lógica que el snap original:
+
+        // - Mitad izquierda: imagen original del video (parte izquierda)
+
+        // - Mitad derecha: reflejo horizontal de la parte izquierda del video
+
+        // Parámetros: ctx (contexto del canvas destino), sourceVideo (elemento video)
+
+        function drawMirrorEffect(ctx, sourceVideo) {
+
+            if (!sourceVideo || sourceVideo.readyState < 2) {
+
+                // Si el video no está listo, rellenamos con fondo negro y un mensaje
+
+                ctx.fillStyle = "#0a0a0a";
+
+                ctx.fillRect(0, 0, W, H);
+
+                ctx.fillStyle = "#aaa";
+
+                ctx.font = "14px system-ui";
+
+                ctx.fillText("Iniciando cámara...", W/2-80, H/2);
+
+                return;
+
+            }
+
+ 
+
+            const halfWidth = W / 2;  // 250px
+
+ 
+
+            try {
+
+                // 1. Dibujar la mitad izquierda ORIGINAL (parte izquierda del video)
+
+                // Recortamos del video: desde (0,0) hasta (ancho/2, alto) y lo estiramos al lado izquierdo del canvas
+
+                ctx.drawImage(sourceVideo, 0, 0, halfWidth, H, 0, 0, halfWidth, H);
+
+ 
+
+                // 2. Dibujar la mitad derecha con efecto espejo:
+
+                //    Tomamos la misma región izquierda del video, la reflejamos horizontalmente y la colocamos en la mitad derecha
+
+                ctx.save();
+
+                ctx.scale(-1, 1);   // invertir horizontalmente
+
+                // La posición X destino original (sin escala) sería halfWidth, pero como estamos escalando -1,
+
+                // la coordenada se transforma: dibujamos en -halfWidth para que aparezca en la posición halfWidth después del escalado.
+
+                // Explicación: con scale(-1,1), el origen se invierte. Para dibujar en la región derecha (de halfWidth a W),
+
+                // debemos dibujar en X = -halfWidth (porque -halfWidth * -1 = halfWidth).
+
+                ctx.drawImage(sourceVideo, 0, 0, halfWidth, H, -W, 0, halfWidth, H);
+
+                ctx.restore();
+
+            } catch(e) {
+
+                console.warn("Error dibujando espejo:", e);
+
+                // fallback simple: dibujar algo
+
+                ctx.fillStyle = "#1e1e2f";
+
+                ctx.fillRect(0,0,W,H);
+
+                ctx.fillStyle = "white";
+
+                ctx.font = "12px monospace";
+
+                ctx.fillText("sincronizando...", W/2-60, H/2);
+
+            }
+
+        }
+
+ 
+
+        // ---------- 3. Loop de animación para el preview en vivo (canvas superior) ----------
+
+        function startMirrorPreview() {
+
+            if (animationId) cancelAnimationFrame(animationId);
+
+ 
+
+            function updatePreview() {
+
+                if (!isStreamActive) return;
+
+                // Si el video tiene datos, aplicamos el efecto espejo en el canvas de preview
+
+                if (video && video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+
+                    drawMirrorEffect(previewCtx, video);
+
+                } else {
+
+                    // mientras carga: fondo oscuro con texto
+
+                    previewCtx.fillStyle = "#111";
+
+                    previewCtx.fillRect(0, 0, W, H);
+
+                    previewCtx.fillStyle = "#ddd";
+
+                    previewCtx.font = "14px system-ui";
+
+                    previewCtx.fillText("🔄 Esperando cámara...", W/2-90, H/2);
+
+                }
+
+                animationId = requestAnimationFrame(updatePreview);
+
+            }
+
+            updatePreview();
+
+        }
+
+ 
+
+        // ---------- 4. Capturar foto (efecto espejo fijo en el canvas inferior) ----------
+
+        // Mantenemos la lógica original pero usando el video oculto como fuente.
+
+        // El botón toma el frame actual del video y aplica el mismo efecto espejo en el canvas inferior.
+
+        function captureSnapshot() {
+
+            if (!video || video.readyState < 2 || video.videoWidth === 0) {
+
+                // Si la cámara no está lista, mostramos un mensaje en el canvas de captura
+
+                captureCtx.fillStyle = "#2c2c2c";
+
+                captureCtx.fillRect(0, 0, W, H);
+
+                captureCtx.fillStyle = "#ffaa44";
+
+                captureCtx.font = "bold 16px system-ui";
+
+                captureCtx.fillText("⏳ Cámara no lista aún", W/2-110, H/2);
+
+                captureCtx.font = "12px system-ui";
+
+                captureCtx.fillStyle = "#ccc";
+
+                captureCtx.fillText("Espera a que la vista previa cargue", W/2-135, H/2+35);
+
+                return;
+
+            }
+
+ 
+
+            const halfWidth = W / 2;
+
+ 
+
+            // Limpiar canvas de captura
+
+            captureCtx.clearRect(0, 0, W, H);
+
+ 
+
+            // Aplicamos exactamente la misma técnica que en el preview
+
+            try {
+
+                // 1. Mitad izquierda (original)
+
+                captureCtx.drawImage(video, 0, 0, halfWidth, H, 0, 0, halfWidth, H);
+
+                // 2. Mitad derecha reflejada
+
+                captureCtx.save();
+
+                captureCtx.scale(-1, 1);
+
+                captureCtx.drawImage(video, 0, 0, halfWidth, H, -W, 0, halfWidth, H);
+
+                captureCtx.restore();
+
+            } catch (err) {
+
+                console.error("Error en captura:", err);
+
+                captureCtx.fillStyle = "#8b0000";
+
+                captureCtx.fillRect(0, 0, W, H);
+
+                captureCtx.fillStyle = "white";
+
+                captureCtx.font = "14px monospace";
+
+                captureCtx.fillText("Error al capturar", W/2-70, H/2);
+
+            }
+
+        }
+
+ 
+
+        // Evento del botón capturar
+
+        snapButton.addEventListener('click', () => {
+
+            captureSnapshot();
+
+            // Pequeña animación de feedback visual en el botón
+
+            snapButton.style.transform = "scale(0.96)";
+
+            setTimeout(() => { snapButton.style.transform = ""; }, 120);
+
+        });
+
+ 
+
+        // Opcional: si el usuario quiere detener el stream al cerrar la página (buena práctica)
+
+        window.addEventListener('beforeunload', () => {
+
+            if (video.srcObject) {
+
+                const tracks = video.srcObject.getTracks();
+
+                tracks.forEach(track => track.stop());
+
+            }
+
+            if (animationId) cancelAnimationFrame(animationId);
+
+        });
+
+ 
+
+        // Mostrar un mensaje de ayuda si la cámara tarda más de 2 segundos en dar video
+
+        setTimeout(() => {
+
+            if (video.readyState < 2) {
+
+                previewCtx.fillStyle = "#222";
+
+                previewCtx.fillRect(0, 0, W, H);
+
+                previewCtx.fillStyle = "#ffaa66";
+
+                previewCtx.font = "15px system-ui";
+
+                previewCtx.fillText("📷 Permite el acceso a la cámara", W/2-130, H/2);
+
+                previewCtx.font = "12px system-ui";
+
+                previewCtx.fillStyle = "#ccc";
+
+                previewCtx.fillText("Si no ves imagen, revisa permisos", W/2-115, H/2+30);
+
+            }
+
+        }, 1800);
+
+    })();
+
+</script>
+
+</body>
+
+</html>
